@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Search, Plus, Minus, MapPin, ChevronRight, Filter } from 'lucide-react';
+import { ShoppingCart, Search, Plus, Minus, MapPin, ChevronRight, Filter, ClipboardList, LogOut, User } from 'lucide-react';
 import api from '../api';
 
 const MenuPage = () => {
@@ -21,6 +21,7 @@ const MenuPage = () => {
   
   const [cartItems, setCartItems] = useState([]);
   const [isUpdatingCart, setIsUpdatingCart] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const isLoggedIn = !!localStorage.getItem('token');
 
@@ -40,7 +41,6 @@ const MenuPage = () => {
       }
 
       try {
-        // Fetch products and categories concurrently using your PublicMenuController endpoints
         const [productRes, categoryRes] = await Promise.all([
           api.get('/menu/products'),
           api.get('/menu/categories')
@@ -78,7 +78,7 @@ const MenuPage = () => {
     return item ? item.quantity : 0;
   };
 
-  // --- 2. SIGNED QUANTITY CART UPDATER (+1 for add, -1 for reduce) ---
+  // --- 2. SIGNED QUANTITY CART UPDATER ---
   const updateCart = async (productId, quantityChange) => {
     if (!isLoggedIn) {
       navigate('/login?redirect=/menu');
@@ -97,6 +97,13 @@ const MenuPage = () => {
     } finally {
       setIsUpdatingCart(false);
     }
+  };
+
+  // --- LOGOUT HANDLER ---
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentTableId');
+    navigate('/login');
   };
 
   // --- 3. CATEGORY MAPPER ---
@@ -146,22 +153,75 @@ const MenuPage = () => {
     <div className="max-w-7xl mx-auto bg-gray-50 min-h-screen pb-28 font-sans text-gray-900 relative">
       
       {/* HEADER */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100 px-5 py-4 flex justify-between items-center">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 px-5 py-3.5 flex justify-between items-center">
         <h1 className="text-2xl font-extrabold tracking-tight text-gray-900">DineFlow</h1>
-        <div className="flex items-center gap-4">
-          {!isLoggedIn && (
-             <button onClick={() => navigate('/login?redirect=/menu')} className="text-sm font-bold text-orange-500 hover:text-orange-600">
-               Login
-             </button>
+        
+        <div className="flex items-center gap-3">
+          {isLoggedIn ? (
+            <div className="flex items-center gap-2">
+              {/* View My Orders Button */}
+              <button 
+                onClick={() => navigate('/my-orders')} 
+                className="hidden sm:flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+              >
+                <ClipboardList size={15} /> My Orders
+              </button>
+
+              {/* Cart Icon */}
+              <button onClick={() => navigate('/checkout')} className="relative p-2.5 bg-white shadow-sm border border-gray-100 rounded-full hover:bg-gray-50 transition-colors">
+                <ShoppingCart size={20} className="text-gray-800" />
+                {totalCartItems > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
+                    {totalCartItems}
+                  </span>
+                )}
+              </button>
+
+              {/* Logout Button */}
+              <button 
+                onClick={handleLogout} 
+                className="hidden sm:flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold px-3 py-2 rounded-xl transition-colors"
+              >
+                <LogOut size={15} /> Logout
+              </button>
+
+              {/* Mobile Profile Dropdown Toggle */}
+              <div className="relative sm:hidden">
+                <button 
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="p-2 bg-gray-100 rounded-full text-gray-800"
+                >
+                  <User size={18} />
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-44 bg-white rounded-2xl shadow-lg border border-gray-100 py-2 z-50">
+                    <button 
+                      onClick={() => { setShowUserMenu(false); navigate('/my-orders'); }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <ClipboardList size={15} className="text-orange-500" /> My Orders
+                    </button>
+                    <button 
+                      onClick={() => { setShowUserMenu(false); handleLogout(); }}
+                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-50"
+                    >
+                      <LogOut size={15} /> Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <button 
+              onClick={() => navigate('/login?redirect=/menu')} 
+              className="text-sm font-bold text-orange-500 hover:text-orange-600 px-3 py-1.5 bg-orange-50 rounded-xl"
+            >
+              Login
+            </button>
           )}
-          <button onClick={() => navigate('/checkout')} className="relative p-2 bg-white shadow-sm border border-gray-100 rounded-full hover:bg-gray-50">
-            <ShoppingCart size={22} className="text-gray-800" />
-            {totalCartItems > 0 && (
-              <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
-                {totalCartItems}
-              </span>
-            )}
-          </button>
+
+
         </div>
       </header>
 
@@ -181,7 +241,7 @@ const MenuPage = () => {
       </section>
 
       {/* SEARCH, CATEGORIES & SORTING */}
-      <div className="px-5 py-4 sticky top-[73px] z-40 bg-gray-50/95 backdrop-blur-sm max-w-3xl mx-auto space-y-4">
+      <div className="px-5 py-4 sticky top-[69px] z-40 bg-gray-50/95 backdrop-blur-sm max-w-3xl mx-auto space-y-4">
         
         {/* Search Input */}
         <div className="relative">

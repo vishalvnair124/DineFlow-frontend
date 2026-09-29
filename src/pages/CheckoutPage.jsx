@@ -1,244 +1,232 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag, CheckCircle2, MapPin } from 'lucide-react';
+import { ArrowLeft, CreditCard, Wallet, Banknote, ChevronDown, CheckCircle2 } from 'lucide-react';
 import api from '../api';
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
-  
-  const [cartItems, setCartItems] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [tables, setTables] = useState([]); // For table selection fallback
+  const [cart, setCart] = useState(null);
+  const [tables, setTables] = useState([]);
   const [selectedTableId, setSelectedTableId] = useState('');
-  
+  const [paymentMode, setPaymentMode] = useState('CASH_AT_COUNTER');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [tableWarning, setTableWarning] = useState('');
   const [orderSuccess, setOrderSuccess] = useState(false);
 
-  // Fetch Cart, Products, and Tables on load
-  const fetchCheckoutData = async () => {
-    try {
-      const [cartRes, menuRes] = await Promise.all([
-        api.get('/cart'),
-        api.get('/menu/products')
-      ]);
-
-      const rawCart = cartRes.data.items || cartRes.data.cartItems || cartRes.data || [];
-      setCartItems(rawCart);
-      setProducts(menuRes.data);
-
-      // Check if table was already saved via QR scan
-      const savedTableId = localStorage.getItem('currentTableId');
-      if (savedTableId) {
-        setSelectedTableId(savedTableId);
-      } else {
-        // Fallback: Try fetching available tables if user didn't scan a QR code
-        try {
-          const tableRes = await api.get('/tables'); // Adjust route if your public table list endpoint differs
-          setTables(tableRes.data);
-        } catch (tErr) {
-          console.warn("Could not fetch table list automatically.");
-        }
-      }
-    } catch (err) {
-      console.error("Failed to load checkout data:", err);
-      setError('Failed to load your cart. Please try logging in again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchCheckoutData();
+    const fetchData = async () => {
+      try {
+        const [cartRes, tablesRes] = await Promise.all([
+          api.get('/cart'),
+          api.get('/tables')
+        ]);
+        setCart(cartRes.data);
+        setTables(Array.isArray(tablesRes.data) ? tablesRes.data : tablesRes.data.tables || []);
+        
+        const savedTable = localStorage.getItem('currentTableId');
+        if (savedTable) {
+          setSelectedTableId(savedTable);
+        }
+      } catch (err) {
+        console.error("Failed to load checkout data:", err);
+        setError('Failed to load checkout details. Please check your connection.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const updateQuantity = async (productId, change) => {
-    try {
-      await api.post('/cart/add', { productId, quantity: change });
-      await fetchCheckoutData();
-    } catch (err) {
-      alert("Failed to update cart item.");
-    }
-  };
-
   const handlePlaceOrder = async () => {
+    if (!selectedTableId) {
+      setTableWarning("Please select a dining table before placing your order.");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setTableWarning('');
     setIsSubmitting(true);
     try {
-      // Calls your exact backend checkout route: POST /api/v1/orders/checkout
       await api.post('/orders/checkout', {
-        tableId: selectedTableId ? Number(selectedTableId) : null
+        tableId: Number(selectedTableId),
+        paymentMode: paymentMode
       });
       
       setOrderSuccess(true);
       localStorage.removeItem('currentTableId');
     } catch (err) {
-      console.error("Order failed:", err);
-      alert(err.response?.data?.message || "Failed to place order. Please try again.");
+      console.error("Order placement failed:", err);
+      setError(err.response?.data?.message || "Failed to place order. Please try again.");
       setIsSubmitting(false);
     }
   };
 
   if (loading) return (
     <div className="flex h-screen items-center justify-center bg-gray-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-orange-500"></div>
+      <div className="animate-spin rounded-full h-10 w-10 border-b-4 border-orange-500"></div>
     </div>
   );
 
   if (orderSuccess) return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
-      <div className="bg-green-100 p-4 rounded-full mb-4">
-        <CheckCircle2 size={48} className="text-green-600" />
+    <div className="max-w-md mx-auto min-h-screen flex flex-col items-center justify-center p-6 text-center bg-white font-sans">
+      <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">✓</div>
+      <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Order Placed Successfully!</h1>
+      <p className="text-gray-500 text-sm mb-6">Your kitchen ticket has been sent. You can track its live preparation progress on your orders page.</p>
+      <div className="w-full space-y-3">
+        <button onClick={() => navigate('/my-orders')} className="w-full bg-orange-500 text-white font-bold py-3.5 rounded-xl hover:bg-orange-600 transition-colors shadow-sm">
+          View My Orders
+        </button>
+        <button onClick={() => navigate('/menu')} className="w-full bg-gray-100 text-gray-700 font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors">
+          Back to Menu
+        </button>
       </div>
-      <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Order Placed Successfully!</h1>
-      <p className="text-gray-500 max-w-sm mb-8">Your order has been sent to the kitchen. Sit back and relax while we prepare your food.</p>
-      <button 
-        onClick={() => navigate('/menu')} 
-        className="bg-gray-900 text-white px-8 py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors"
-      >
-        Back to Menu
-      </button>
     </div>
   );
 
-  const getProductDetails = (item) => {
-    const productId = item.productId || item.product?.id || item.id;
-    const matched = products.find(p => p.id === productId);
-    return {
-      id: productId,
-      name: matched?.name || item.productName || item.name || 'Delicious Item',
-      price: matched?.price || item.price || 0,
-      imageUrl: matched?.imageUrl || item.imageUrl || null
-    };
-  };
-
-  const totalPrice = cartItems.reduce((acc, item) => {
-    const product = getProductDetails(item);
-    return acc + (product.price * item.quantity);
+  const cartItems = cart?.cartItems || cart?.items || [];
+  const totalPrice = cart?.totalPrice || cartItems.reduce((acc, item) => {
+    const unitPrice = item.product?.price || item.price || item.unitPrice || 0;
+    return acc + (unitPrice * item.quantity);
   }, 0);
 
   return (
     <div className="max-w-2xl mx-auto bg-gray-50 min-h-screen pb-32 font-sans text-gray-900 p-5">
       
+      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate('/menu')} className="p-2 bg-white rounded-full border border-gray-200 hover:bg-gray-100">
+        <button onClick={() => navigate('/menu')} className="p-2 bg-white rounded-full border border-gray-200 hover:bg-gray-100 transition-colors">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-2xl font-extrabold">Your Cart & Checkout</h1>
+        <h1 className="text-2xl font-extrabold">Checkout</h1>
       </div>
 
-      {error && <div className="bg-red-50 text-red-500 p-4 rounded-xl text-sm mb-4 font-medium">{error}</div>}
+      {error && <div className="bg-red-50 text-red-600 border border-red-200 p-4 rounded-2xl text-sm mb-4 font-medium">{error}</div>}
+      {tableWarning && <div className="bg-amber-50 text-amber-700 border border-amber-200 p-4 rounded-2xl text-sm mb-4 font-bold">{tableWarning}</div>}
 
-      {cartItems.length === 0 ? (
-        <div className="text-center py-20 bg-white rounded-2xl border border-gray-100 p-8 shadow-sm mt-10">
-          <ShoppingBag size={48} className="mx-auto text-gray-300 mb-3" />
-          <h2 className="text-xl font-bold text-gray-800 mb-1">Your cart is empty</h2>
-          <p className="text-gray-400 text-sm mb-6">Explore our menu and add some delicious food!</p>
-          <button onClick={() => navigate('/menu')} className="bg-orange-500 text-white font-bold px-6 py-3 rounded-xl hover:bg-orange-600 transition-colors">
-            Browse Menu
-          </button>
+      <div className="space-y-6">
+        
+        {/* Compact & Clean Table Selector */}
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Dining Table</h2>
+            <p className="text-xs text-gray-500 font-medium">Where are you seated?</p>
+          </div>
+
+          <div className="relative w-44">
+            <select
+              value={selectedTableId}
+              onChange={(e) => {
+                setSelectedTableId(e.target.value);
+                setTableWarning('');
+              }}
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 px-3 text-xs font-bold text-gray-800 appearance-none focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 transition-all cursor-pointer"
+            >
+              <option value="">Select Table...</option>
+              {tables.map((table) => (
+                <option key={table.id} value={table.id}>
+                  Table #{table.tableNumber}
+                </option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+              <ChevronDown size={14} />
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-6">
-          
-          {/* TABLE SELECTION BOX */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl">
-                <MapPin size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-gray-900">Dining Table</h3>
-                <p className="text-xs text-gray-500">
-                  {selectedTableId ? `Assigned to Table #${selectedTableId}` : "No table scanned or selected"}
-                </p>
-              </div>
-            </div>
 
-            {/* If no table was scanned, let them pick from a dropdown */}
-            {!localStorage.getItem('currentTableId') && tables.length > 0 && (
-              <select 
-                value={selectedTableId} 
-                onChange={(e) => setSelectedTableId(e.target.value)}
-                className="bg-gray-50 border border-gray-200 text-sm font-medium rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                <option value="">Select Table</option>
-                {tables.map(t => (
-                  <option key={t.id} value={t.id}>Table {t.tableNumber || t.id}</option>
-                ))}
-              </select>
-            )}
-          </div>
+        {/* Order Summary */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Order Summary</h2>
+          {cartItems.length === 0 ? (
+            <p className="text-sm text-gray-400 py-4 text-center">Your cart is empty.</p>
+          ) : (
+            <div className="space-y-3">
+              {cartItems.map((item, idx) => {
+                const itemPrice = item.product?.price || item.price || item.unitPrice || 0;
+                const itemName = item.product?.name || item.productName || "Menu Item";
 
-          {/* Items List */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 divide-y divide-gray-100 overflow-hidden">
-            {cartItems.map((item, index) => {
-              const product = getProductDetails(item);
-              const subtotal = product.price * item.quantity;
-
-              return (
-                <div key={product.id || index} className="p-4 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    {product.imageUrl ? (
-                      <img 
-                        src={product.imageUrl.startsWith('http') ? product.imageUrl : `http://localhost:8080${product.imageUrl}`} 
-                        alt={product.name} 
-                        className="w-16 h-16 object-cover rounded-xl border border-gray-100"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-xs font-medium">No Img</div>
-                    )}
-                    <div>
-                      <h3 className="font-bold text-gray-900">{product.name}</h3>
-                      <p className="text-sm font-extrabold text-orange-600">${product.price.toFixed(2)}</p>
-                    </div>
+                return (
+                  <div key={idx} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-800 font-medium">
+                      <span className="font-bold text-orange-600 mr-2">{item.quantity}x</span>
+                      {itemName}
+                    </span>
+                    <span className="font-bold text-gray-900">
+                      ${(itemPrice * item.quantity).toFixed(2)}
+                    </span>
                   </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-2 py-1">
-                      <button onClick={() => updateQuantity(product.id, -1)} className="text-gray-600 hover:text-black p-1">
-                        <Minus size={14} strokeWidth={2.5} />
-                      </button>
-                      <span className="font-bold text-sm w-5 text-center">{item.quantity}</span>
-                      <button onClick={() => updateQuantity(product.id, 1)} className="text-gray-600 hover:text-black p-1">
-                        <Plus size={14} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                    
-                    <span className="font-extrabold text-gray-900 w-16 text-right">${subtotal.toFixed(2)}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Bill Summary */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3">
-            <h3 className="font-bold text-gray-800 text-lg mb-2">Order Summary</h3>
-            <div className="flex justify-between text-sm text-gray-500">
-              <span>Subtotal</span>
-              <span className="font-bold text-gray-800">${totalPrice.toFixed(2)}</span>
+                );
+              })}
+              <div className="border-t border-gray-100 pt-3 flex justify-between items-center mt-3">
+                <span className="font-extrabold text-gray-800">Total Amount</span>
+                <span className="text-xl font-extrabold text-orange-600">${totalPrice.toFixed(2)}</span>
+              </div>
             </div>
-            <div className="flex justify-between text-sm text-gray-500">
-              <span>Tax & Service Fee (5%)</span>
-              <span className="font-bold text-gray-800">${(totalPrice * 0.05).toFixed(2)}</span>
-            </div>
-            <div className="border-t border-gray-100 pt-3 flex justify-between items-center text-lg font-extrabold text-gray-900">
-              <span>Total Amount</span>
-              <span className="text-orange-600">${(totalPrice * 1.05).toFixed(2)}</span>
-            </div>
-          </div>
-
-          {/* Place Order Button */}
-          <button 
-            onClick={handlePlaceOrder}
-            disabled={isSubmitting}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-2xl shadow-lg transition-colors flex items-center justify-center gap-2 disabled:bg-orange-300"
-          >
-            {isSubmitting ? 'Placing Order...' : 'Confirm & Place Order'}
-          </button>
+          )}
         </div>
-      )}
+
+        {/* Payment Mode Selection */}
+        <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Select Payment Mode</h2>
+          <div className="grid grid-cols-3 gap-3">
+            
+            <button
+              type="button"
+              onClick={() => setPaymentMode('CASH_AT_COUNTER')}
+              className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center font-bold text-xs transition-all ${
+                paymentMode === 'CASH_AT_COUNTER' 
+                  ? 'border-orange-500 bg-orange-50 text-orange-600 shadow-sm' 
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Banknote size={20} />
+              Cash at Counter
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentMode('CARD')}
+              className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center font-bold text-xs transition-all ${
+                paymentMode === 'CARD' 
+                  ? 'border-orange-500 bg-orange-50 text-orange-600 shadow-sm' 
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <CreditCard size={20} />
+              Card
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPaymentMode('UPI')}
+              className={`p-4 rounded-xl border flex flex-col items-center justify-center gap-2 text-center font-bold text-xs transition-all ${
+                paymentMode === 'UPI' 
+                  ? 'border-orange-500 bg-orange-50 text-orange-600 shadow-sm' 
+                  : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Wallet size={20} />
+              UPI / Online
+            </button>
+
+          </div>
+        </div>
+
+      </div>
+
+      {/* Footer Action */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg max-w-2xl mx-auto">
+        <button
+          disabled={isSubmitting || cartItems.length === 0}
+          onClick={handlePlaceOrder}
+          className="w-full bg-orange-500 text-white font-extrabold py-4 rounded-xl hover:bg-orange-600 transition-colors disabled:opacity-50 shadow-sm"
+        >
+          {isSubmitting ? "Placing Order..." : `Confirm & Place Order ($${totalPrice.toFixed(2)})`}
+        </button>
+      </div>
+
     </div>
   );
 };

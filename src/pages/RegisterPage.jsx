@@ -59,7 +59,7 @@ const RegisterPage = () => {
     } catch (err) {
       console.error("Registration Error:", err);
       // Give the user a friendly error message
-      setError(err.response?.data?.message || 'Registration failed. That Email or Phone might already be in use.');
+      setError(err.response?.data?.message || 'Registration failed. That Username or Email or Phone might already be in use.');
       setLoading(false);
     }
   };
