@@ -5,7 +5,8 @@ import RegisterPage from './pages/RegisterPage'; // <-- Add this import
 import MenuPage from './pages/MenuPage';
 import CheckoutPage from './pages/CheckoutPage';
 import MyOrdersPage from './pages/MyOrdersPage';
-
+import AdminLoginPage from './pages/AdminLoginPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
 
 
 function App() {
@@ -22,6 +23,8 @@ function App() {
         <Route path="/checkout" element={<CheckoutPage />} />
       
         <Route path="/my-orders" element={<MyOrdersPage />} />
+        <Route path="/adminlogin" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminDashboardPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
 
